@@ -15,6 +15,7 @@
     .controls{display:flex;gap:8px;align-items:center;margin-top:10px}
     button{background:var(--accent);border:none;color:#04201a;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
     .muted{color:var(--muted);font-size:13px}
+    .status{margin-left:12px;color:#93c5fd;font-weight:600}
   </style>
 </head>
 <body>
@@ -29,73 +30,70 @@
       <div class="controls">
         <button id="start">Start / Restart</button>
         <button id="toggleAI">Toggle AI</button>
+        <div class="status" id="timer">Time: 05:00</div>
         <div style="margin-left:auto" id="score" class="muted">0 — 0</div>
       </div>
     </div>
   </div>
 
   <script>
-    // Basic Pong implementation: one file, responsive canvas, simple AI
+    // Pong with sudden death and speed-up on bounces
     const canvas = document.getElementById('c');
     const ctx = canvas.getContext('2d');
 
-    // logical size (will scale to device)
-    let W = 900, H = 480; // aspect ratio
+    let W = 900, H = 480;
     function resize(){
-      const rect = canvas.getBoundingClientRect();
       canvas.width = Math.min(window.innerWidth - 100, W);
       canvas.height = Math.min(480, window.innerHeight - 150);
-      scaleX = canvas.width / W;
-      scaleY = canvas.height / H;
     }
     window.addEventListener('resize', resize);
     resize();
 
-    // Game objects
     const PADDLE_W = 12, PADDLE_H = 84;
     const BALL_R = 8;
     let left = {x: 24, y: H/2 - PADDLE_H/2, vy:0, score:0};
     let right = {x: W - 24 - PADDLE_W, y: H/2 - PADDLE_H/2, vy:0, score:0};
     let ball = {x: W/2, y: H/2, vx: 220, vy: 80, r: BALL_R};
-    let ai = true; // AI controls right paddle
+    let ai = true;
     let running = false;
     const SCORE_TO_WIN = 7;
 
-    // Input
+    // Sudden death settings
+    const SUDDEN_DEATH_SECONDS = 300; // 5 minutes
+    let startTimestamp = null;
+    let suddenDeath = false;
+    const timerEl = document.getElementById('timer');
+
     const keys = {};
     window.addEventListener('keydown', (e)=>{ keys[e.key] = true; });
     window.addEventListener('keyup', (e)=>{ keys[e.key] = false; });
 
-    // Reset
     function resetBall(direction){
       ball.x = W/2; ball.y = H/2;
-      const speed = 200 + Math.min(120, (left.score + right.score) * 10);
-      const angle = (Math.random()*Math.PI/3) - Math.PI/6; // +-30deg
-      ball.vx = speed * (direction || (Math.random() < 0.5 ? -1 : 1)) * Math.cos(angle);
-      ball.vy = speed * Math.sin(angle);
+      const speed = 200 + Math.min(400, (left.score + right.score) * 12);
+      const angle = (Math.random()*Math.PI/3) - Math.PI/6;
+      const dir = direction || (Math.random() < 0.5 ? -1 : 1);
+      const vx = speed * Math.cos(angle) * dir;
+      const vy = speed * Math.sin(angle);
+      ball.vx = vx; ball.vy = vy;
     }
 
     function resetGame(){
       left.y = H/2 - PADDLE_H/2; right.y = H/2 - PADDLE_H/2; left.score = 0; right.score = 0; updateScore();
-      resetBall( Math.random() < 0.5 ? -1 : 1 );
+      suddenDeath = false; startTimestamp = null; updateTimerDisplay(SUDDEN_DEATH_SECONDS);
+      resetBall(Math.random() < 0.5 ? -1 : 1);
     }
 
-    // Draw
     function draw(){
-      // clear
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      // scale to logical coords
       ctx.save();
       ctx.scale(canvas.width / W, canvas.height / H);
-      // center line
       ctx.fillStyle = 'rgba(255,255,255,0.06)';
       for(let i=10;i<H;i+=24) ctx.fillRect(W/2 -1, i, 2, 14);
-      // paddles
       ctx.fillStyle = '#a3e635';
-      roundRect(ctx, left.x, left.y, PADDLE_W, PADDLE_H, 6, true, false);
+      roundRect(ctx, left.x, left.y, PADDLE_W, PADDLE_H, 6);
       ctx.fillStyle = '#60a5fa';
-      roundRect(ctx, right.x, right.y, PADDLE_W, PADDLE_H, 6, true, false);
-      // ball
+      roundRect(ctx, right.x, right.y, PADDLE_W, PADDLE_H, 6);
       ctx.fillStyle = '#f97316';
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
       ctx.restore();
@@ -112,56 +110,106 @@
       ctx.fill();
     }
 
-    // Update physics
+    function clamp(v,a,b){return Math.max(a, Math.min(b, v));}
+
+    function circleRectCollide(c, r){
+      const rx = r.x, ry = r.y, rw = PADDLE_W, rh = PADDLE_H;
+      const closestX = clamp(c.x, rx, rx+rw);
+      const closestY = clamp(c.y, ry, ry+rh);
+      const dx = c.x - closestX; const dy = c.y - closestY;
+      return (dx*dx + dy*dy) <= (c.r * c.r);
+    }
+
+    // speed clamp
+    function clampSpeed(){
+      const max = 1200;
+      const mag = Math.hypot(ball.vx, ball.vy);
+      if(mag > max){
+        const f = max / mag;
+        ball.vx *= f; ball.vy *= f;
+      }
+    }
+
+    // Timer display
+    function updateTimerDisplay(secondsLeft){
+      if(suddenDeath){ timerEl.textContent = 'Sudden Death — Next score wins!'; timerEl.style.color = '#fb7185'; return; }
+      const m = Math.floor(secondsLeft/60); const s = Math.floor(secondsLeft%60);
+      timerEl.textContent = `Time: ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      timerEl.style.color = '#93c5fd';
+    }
+
     let last = performance.now();
     function step(now){
       const dt = Math.min(0.03, (now - last)/1000); last = now;
       if(running){
-        // Player input left: W/S
+        // initialize timer
+        if(startTimestamp === null) startTimestamp = now;
+        const elapsed = (now - startTimestamp) / 1000;
+        if(!suddenDeath){
+          const remaining = Math.max(0, SUDDEN_DEATH_SECONDS - elapsed);
+          updateTimerDisplay(remaining);
+          if(elapsed >= SUDDEN_DEATH_SECONDS){
+            suddenDeath = true;
+            updateTimerDisplay(0);
+          }
+        }
+
         const speed = 320;
         if(keys['w'] || keys['W']) left.y -= speed*dt;
         if(keys['s'] || keys['S']) left.y += speed*dt;
-        // Player or AI right: ArrowUp/ArrowDown if two-player
         if(!ai){
           if(keys['ArrowUp']) right.y -= speed*dt;
           if(keys['ArrowDown']) right.y += speed*dt;
         } else {
-          // simple AI: follow ball with some easing and max speed
           const center = right.y + PADDLE_H/2;
           const diff = ball.y - center;
           const aiSpeed = 260;
           right.y += Math.max(Math.min(diff*2*dt, aiSpeed*dt), -aiSpeed*dt);
         }
-        // Clamp paddles
-        left.y = Math.max(0, Math.min(H - PADDLE_H, left.y));
-        right.y = Math.max(0, Math.min(H - PADDLE_H, right.y));
+        left.y = clamp(left.y, 0, H - PADDLE_H);
+        right.y = clamp(right.y, 0, H - PADDLE_H);
 
-        // Move ball
         ball.x += ball.vx * dt; ball.y += ball.vy * dt;
 
-        // Collide top/bottom
-        if(ball.y - ball.r < 0){ ball.y = ball.r; ball.vy = -ball.vy; }
-        if(ball.y + ball.r > H){ ball.y = H - ball.r; ball.vy = -ball.vy; }
+        // top/bottom bounce -> increase speed slightly
+        if(ball.y - ball.r < 0){ ball.y = ball.r; ball.vy = -ball.vy; ball.vx *= 1.02; ball.vy *= 1.02; clampSpeed(); }
+        if(ball.y + ball.r > H){ ball.y = H - ball.r; ball.vy = -ball.vy; ball.vx *= 1.02; ball.vy *= 1.02; clampSpeed(); }
 
-        // Collide paddles
+        // paddle collisions -> larger speed-up and angle change
         if(circleRectCollide(ball, left)){
-          ball.x = left.x + PADDLE_W + ball.r; ball.vx = Math.abs(ball.vx) * 1.05; // speed up
-          // add angle based on hit position
+          ball.x = left.x + PADDLE_W + ball.r;
+          ball.vx = Math.abs(ball.vx) * 1.06; // slightly bigger bump
           const n = (ball.y - (left.y + PADDLE_H/2)) / (PADDLE_H/2);
-          ball.vy += n * 200;
+          ball.vy += n * 220;
+          clampSpeed();
         }
-        if(circleRectCollide(ball, right)){
-          ball.x = right.x - ball.r; ball.vx = -Math.abs(ball.vx) * 1.05;
+        if(circleRectCollide(ball, right)){ 
+          ball.x = right.x - ball.r;
+          ball.vx = -Math.abs(ball.vx) * 1.06;
           const n = (ball.y - (right.y + PADDLE_H/2)) / (PADDLE_H/2);
-          ball.vy += n * 200;
+          ball.vy += n * 220;
+          clampSpeed();
         }
 
-        // Score
-        if(ball.x < -40){ right.score += 1; updateScore(); checkWin(); resetBall(1); }
-        if(ball.x > W + 40){ left.score += 1; updateScore(); checkWin(); resetBall(-1); }
+        // Score handling
+        if(ball.x < -40){
+          // right scored
+          if(suddenDeath){ right.score += 1; updateScore(); announceWinner('Right player'); }
+          else { right.score += 1; updateScore(); checkWin(); resetBall(1); }
+        }
+        if(ball.x > W + 40){
+          if(suddenDeath){ left.score += 1; updateScore(); announceWinner('Left player'); }
+          else { left.score += 1; updateScore(); checkWin(); resetBall(-1); }
+        }
       }
       draw();
       requestAnimationFrame(step);
+    }
+
+    function announceWinner(name){
+      running = false;
+      setTimeout(()=>alert(name + ' wins!'), 60);
+      startTimestamp = null;
     }
 
     function checkWin(){
@@ -169,31 +217,16 @@
         running = false;
         const winner = left.score > right.score ? 'Left player' : 'Right player';
         setTimeout(()=>alert(winner + ' wins!'), 60);
+        startTimestamp = null;
       }
     }
 
-    function updateScore(){
-      document.getElementById('score').textContent = left.score + ' — ' + right.score;
-    }
+    function updateScore(){ document.getElementById('score').textContent = left.score + ' — ' + right.score; }
 
-    function circleRectCollide(c, r){
-      // r: paddle with x,y,w,h
-      const rx = r.x, ry = r.y, rw = PADDLE_W, rh = PADDLE_H;
-      const closestX = clamp(c.x, rx, rx+rw);
-      const closestY = clamp(c.y, ry, ry+rh);
-      const dx = c.x - closestX;
-      const dy = c.y - closestY;
-      return (dx*dx + dy*dy) <= (c.r * c.r);
-    }
-    function clamp(v,a,b){return Math.max(a, Math.min(b, v));}
-
-    // Controls
-    document.getElementById('start').addEventListener('click', ()=>{ running = true; resetGame(); });
+    document.getElementById('start').addEventListener('click', ()=>{ running = true; resetGame(); startTimestamp = performance.now(); });
     document.getElementById('toggleAI').addEventListener('click', ()=>{ ai = !ai; document.getElementById('toggleAI').textContent = ai ? 'Toggle AI (AI)' : 'Toggle AI (2P)'; });
 
-    // initialize
-    resetGame(); running = false;
-    requestAnimationFrame(step);
+    resetGame(); running = false; requestAnimationFrame(step);
   </script>
 </body>
 </html>
