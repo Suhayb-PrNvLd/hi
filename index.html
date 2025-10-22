@@ -3,43 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Simple Calculator</title>
+  <title>BlockBlast-inspired — Prototype</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Simple Calculator</h1>
-    <div class="calculator" role="application" aria-label="Simple calculator">
-      <input type="text" id="display" class="display" aria-label="Calculator display" readonly value="0">
-
-      <div class="buttons">
-        <button class="btn action" data-action="clear">C</button>
-        <button class="btn action" data-action="back">←</button>
-        <button class="btn action" data-action="percent">%</button>
-        <button class="btn operator" data-action="/">÷</button>
-
-        <button class="btn" data-value="7">7</button>
-        <button class="btn" data-value="8">8</button>
-        <button class="btn" data-value="9">9</button>
-        <button class="btn operator" data-action="*">×</button>
-
-        <button class="btn" data-value="4">4</button>
-        <button class="btn" data-value="5">5</button>
-        <button class="btn" data-value="6">6</button>
-        <button class="btn operator" data-action="-">−</button>
-
-        <button class="btn" data-value="1">1</button>
-        <button class="btn" data-value="2">2</button>
-        <button class="btn" data-value="3">3</button>
-        <button class="btn operator" data-action="+">+</button>
-
-        <button class="btn double" data-value="0">0</button>
-        <button class="btn" data-value=".">.</button>
-        <button class="btn equals" data-action="=">=</button>
+  <div class="wrap">
+    <header>
+      <h1>BlockBlast — Prototype</h1>
+      <div class="hud">
+        <div id="score">Score: 0</div>
+        <div id="lives">Lives: 3</div>
+        <div id="level">Level: 1</div>
       </div>
-    </div>
-    <p class="hint">You can also use your keyboard. Press Enter for =, Backspace for ←.</p>
+    </header>
+
+    <main>
+      <canvas id="game" aria-label="BlockBlast game canvas"></canvas>
+      <div class="controls">
+        <button id="start">Start / Restart</button>
+        <label>Touch / Mouse to move paddle</label>
+      </div>
+    </main>
+
+    <footer class="muted">Prototype: original code and assets. Keyboard: ← → or A/D, Space to launch ball.</footer>
   </div>
+
   <script src="script.js"></script>
 </body>
 </html>

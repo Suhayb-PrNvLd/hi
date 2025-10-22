@@ -1,0 +1,15 @@
+:root{ --bg:#0b1220; --panel:#071324; --accent:#ffb86b; --muted:#9aa4b2; }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#071028 0%,#071324 100%);color:#fff}
+.wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;padding:18px}
+header{width:100%;max-width:980px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+h1{font-size:18px;margin:0}
+.hud{display:flex;gap:12px;font-weight:600;color:var(--muted)}
+main{width:100%;max-width:980px}
+canvas{width:100%;height:560px;border-radius:10px;background:linear-gradient(180deg,#0a1a2b 0%,#071324 100%);display:block}
+.controls{display:flex;gap:12px;align-items:center;margin-top:10px}
+button{background:var(--accent);border:none;color:#041017;padding:8px 12px;border-radius:8px;cursor:pointer}
+.muted{color:var(--muted);font-size:13px;margin-top:12px}
+
+/* small screens */
+@media (max-width:600px){ canvas{height:420px} }
